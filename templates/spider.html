@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	  <title>京东商铺爬虫</title>
+	  <meta charset="utf-8">
+	  <meta name="viewport" content="width=device-width, initial-scale=1">
+	  <link rel="stylesheet" href="https://cdn.bootcss.com/bootstrap/4.1.0/css/bootstrap.min.css">
+	  <script src="https://cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+	  <script src="https://cdn.bootcss.com/popper.js/1.12.5/umd/popper.min.js"></script>
+	  <script src="https://cdn.bootcss.com/bootstrap/4.1.0/js/bootstrap.min.js"></script>
+      <script src="https://cdn.bootcss.com/angular.js/1.6.3/angular.min.js"></script>
+	</head>
+	<body>
+    {% verbatim %}
+        <div ng-app="logan" ng-controller="HelloAjax">
+            <div class="container" style="margin-top: 5%">
+			    <form class="form-inline">
+				    <div style="width: auto; margin:0 auto;">
+					    <input type="text" class="form-control" id="website" placeholder="Enter a url" style="width: 526px;">
+					    <button type="button" class="btn btn-primary" id="start" ng-click="start_spider()">开始爬取</button>
+				    </div>
+
+			    </form>
+		    </div>
+
+		    <div class="container" style="margin-top: 3%;" ng-show="isShow">
+			    <table class="table table-bordered" id="dataTable">
+				    <thread>
+					    <tr>
+						    <th style="width: 5%;padding-left: 0;padding-right: 0;">评论数</th>
+						    <th style="width: 50%;">标题</th>
+						    <th style="width: 1%;">价格</th>
+					        <!--	<th style="width: 76px;">SKU</th>-->
+						    <th style="width: 6%;">商品地址</th>
+						    <th style="width: 6%">主图图片</th>
+					    </tr>
+				    </thread>
+				    <tbody>
+					    <tr ng-repeat="x in shop_data | orderBy: 'comment_num' : true">
+						    <td>{{ x.comment_num }} </td>
+						    <td>{{ x.good_name }}</td>
+						    <td>{{ x.price }} </td>
+						    <td><a ng-href="{{ x.good_link }}" target="_blank">{{ x.good_link }}</a> </td>
+			                <!--<td>********</td>-->
+						    <td><a ng-href="{{ x.first_photo_link }}" target="_blank"><img ng-src="{{ x.first_photo_link }}" style="width: 60px; height: 50px"></a></td>
+					    </tr>
+				    </tbody>
+			    </table>
+		    </div>
+
+		    <div class="container" style="margin-top: 1%;" ng-show="isShow">
+                <div style="text-align: center;">
+                    <button type="button" class="btn btn-primary" onclick="method5('dataTable')">导出为EXCEL</button>
+                </div>
+		    </div>
+        </div>
+    {% endverbatim %}
+
+    <script>
+        let myModule = angular.module("logan", []);
+        myModule.controller("HelloAjax", ["$scope", "$http", function HelloAjax($scope, $http) {
+            $scope.start_spider = function () {
+                $http({
+                    method: "GET",
+                    url: "/test_ajax",
+                    params: {"url": document.getElementById("website").value}
+                }).then(function(response) {
+                    $scope.shop_data = response.data;
+                    $scope.isShow = true;
+                    alert("爬取成功!");
+                    console.log(response.data);
+                }, function(error) {
+                    console.log(error);
+                    alert(error);
+                    alert("出错啦！ 稍后再试！")
+                });
+            }
+        }]);
+
+
+
+        let idTmr;
+
+        function getExplorer() {
+            let explorer = window.navigator.userAgent;
+            //ie
+            if(explorer.indexOf("MSIE") >= 0) {
+                return 'ie';
+            }
+            //firefox
+            else if(explorer.indexOf("Firefox") >= 0) {
+                return 'Firefox';
+            }
+            //Chrome
+            else if(explorer.indexOf("Chrome") >= 0) {
+                return 'Chrome';
+            }
+            //Opera
+            else if(explorer.indexOf("Opera") >= 0) {
+                return 'Opera';
+            }
+            //Safari
+            else if(explorer.indexOf("Safari") >= 0) {
+                return 'Safari';
+            }
+        }
+
+        function method5(tableid) {
+            if(getExplorer() == 'ie') {
+                let curTbl = document.getElementById(tableid);
+                let oXL = new ActiveXObject("Excel.Application");
+                let oWB = oXL.Workbooks.Add();
+                let xlsheet = oWB.Worksheets(1);
+                let sel = document.body.createTextRange();
+                sel.moveToElementText(curTbl);
+                sel.select();
+                sel.execCommand("Copy");
+                xlsheet.Paste();
+                oXL.Visible = true;
+
+                try {
+                    let fname = oXL.Application.GetSaveAsFilename("Excel.xls",
+                        "Excel Spreadsheets (*.xls), *.xls");
+                } catch(e) {
+                    print("Nested catch caught " + e);
+                } finally {
+                    oWB.SaveAs(fname);
+                    oWB.Close(savechanges = false);
+                    oXL.Quit();
+                    oXL = null;
+                    idTmr = window.setInterval("Cleanup();", 1);
+                }
+
+            } else {
+                tableToExcel(tableid)
+            }
+        }
+
+        function Cleanup() {
+            window.clearInterval(idTmr);
+            CollectGarbage();
+        }
+        let tableToExcel = (function() {
+            let uri = 'data:application/vnd.ms-excel;base64,',
+                template = '<html><head><meta charset="UTF-8"></head><body><table  border="1">{table}</table></body></html>',
+                base64 = function(
+                    s) {
+                    return window.btoa(unescape(encodeURIComponent(s)))
+                },
+                format = function(s, c) {
+                    return s.replace(/{(\w+)}/g, function(m, p) {
+                        return c[p];
+                    })
+                };
+            return function(table, name) {
+                if(!table.nodeType)
+                    table = document.getElementById(table)
+                let ctx = {
+                    worksheet: name || 'Worksheet',
+                    table: table.innerHTML
+                };
+                window.location.href = uri + base64(format(template, ctx))
+            }
+        })()
+    </script>
+    </body>
+
+
+
+
+
+</html>
